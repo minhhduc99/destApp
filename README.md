@@ -1,6 +1,9 @@
-- Requirement: Python 3.11.4
+- Requirement: Python 3.11.x
 - Create virtual environment: python -m venv venv
 - Start virtual environment: .\venv\Scripts\activate
+- Install requirements: pip install -r requirements.txt
+- Run server: python manage.py runserver
+- Run FE: python frontend/app.py
 
 # desktop-app-whith-django
 Using Django backend through django rest framework to create desktop application

@@ -3,11 +3,28 @@ from account.models import User
 
 
 class Room(models.Model):
-    pass
-    # room_num = models.IntegerField(blank=True, null=True)
-    # guest = models.ForeignKey(User, on_delete=models.CASCADE)
-    # check_in = models.DateField(blank=True, null=True)
-    # check_out = models.DateField(blank=True, null=True)
+    TYPE_CHOICES = (
+        ('Standard', 'Standard'),
+        ('Single', 'Single'),
+        ('Double', 'Double'),
+        ('Deluxe', 'Deluxe')
+    )
+    room_number = models.IntegerField(blank=True, null=True)
+    room_type = models.CharField(max_length=20, choices=TYPE_CHOICES)
+    room_description = models.TextField(null=True)
 
-    # def __str__(self):
-    #     return str(self.room_num)
+    def __str__(self):
+        return f"{self.room_num}"
+
+
+class Booking(models.Model):
+    guest = models.ForeignKey(User, on_delete=models.CASCADE)
+    room = models.ForeignKey(Room, on_delete=models.CASCADE)
+    booking_time = models.DateTimeField()
+    start_time = models.DateField()
+    end_time = models.DateField()
+    check_in = models.DateField(blank=True, null=True)
+    check_out = models.DateField(blank=True, null=True)
+
+    def __str__(self):
+        return f"{self.guest}-{self.room}"

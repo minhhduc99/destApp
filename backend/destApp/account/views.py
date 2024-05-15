@@ -1,10 +1,14 @@
-from rest_framework import status
+from rest_framework import status, generics
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny
 from rest_framework_simplejwt.tokens import RefreshToken
-from .serializers import UserRegistrationSerializer, UserLoginSerializer
+from django.contrib.auth import get_user_model
+from .serializers import (
+    UserRegistrationSerializer, UserLoginSerializer, UserSerializer)
 
+
+User = get_user_model()
 
 class UserRegistrationView(APIView):
     permission_classes = [AllowAny]
@@ -46,9 +50,11 @@ class UserLogoutView(APIView):
             return Response(status=status.HTTP_400_BAD_REQUEST)
 
 
-class ListUserView(APIView):
-    pass
+class ListUserView(generics.ListAPIView):
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
 
 
-class EditUserView(APIView):
-    pass
+class EditUserView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = User.objects.all()
+    serializer_class = UserSerializer

@@ -20,11 +20,13 @@ class AddRoomView(APIView):
     def post(self, request):
         room_number = request.data.get('room_number')
         room_type = request.data.get('room_type')
+        room_price = request.data.get('room_price')
         room_description = request.data.get('room_description')
 
         data = {
             'room_number': room_number,
             'room_type': room_type,
+            'room_price': room_price,
             'room_description': room_description
         }
 
@@ -57,11 +59,13 @@ class EditRoomView(APIView):
                             status=status.HTTP_404_NOT_FOUND)
         room_number = request.data.get('room_number')
         room_type = request.data.get('room_type')
+        room_price = request.data.get('room_price')
         room_description = request.data.get('room_description')
 
         data = {
             'room_number': room_number,
             'room_type': room_type,
+            'room_price': room_price,
             'room_description': room_description
         }
 

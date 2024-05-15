@@ -39,11 +39,16 @@ class UserLogoutView(APIView):
     def post(self, request):
         try:
             refresh_token = request.data.get("refresh_token")
-            access_token = request.headers.get('Authorization').split()[1]
             token = RefreshToken(refresh_token)
             token.blacklist()
-            access_token_obj = RefreshToken(access_token)
-            access_token_obj.blacklist()
-            return Response(status=status.HTTP_205_RESET_CONTENT)
+            return Response(status=status.HTTP_200_OK)
         except Exception as e:
             return Response(status=status.HTTP_400_BAD_REQUEST)
+
+
+class ListUserView(APIView):
+    pass
+
+
+class EditUserView(APIView):
+    pass

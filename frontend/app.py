@@ -23,7 +23,8 @@ class MainApplication(tk.Tk):
 
     def show_login_form(self):
         self.clear_container()
-        login_form = LoginForm(self.container, self.login_success, self.show_register_form)
+        login_form = LoginForm(
+            self.container, self.login_success, self.show_register_form)
         login_form.pack(fill=tk.BOTH, expand=True)
 
     def show_register_form(self):
@@ -34,11 +35,12 @@ class MainApplication(tk.Tk):
     def login_success(self, role, access_token, refresh_token):
         self.access_token = access_token
         self.refresh_token = refresh_token
-        self.show_hotel_management_form(role)
+        self.show_hotel_management_form(role, access_token)
 
-    def show_hotel_management_form(self, role):
+    def show_hotel_management_form(self, role, access_token):
         self.clear_container()
-        hotel_management_form = HotelManagementForm(self.container, role)
+        hotel_management_form = HotelManagementForm(
+            self.container, role, access_token)
         hotel_management_form.pack(fill=tk.BOTH, expand=True)
         self.show_logout_button()
 
@@ -47,7 +49,8 @@ class MainApplication(tk.Tk):
             widget.destroy()
 
     def show_logout_button(self):
-        self.logout_button = tk.Button(self.top_frame, text="Logout", command=self.logout)
+        self.logout_button = tk.Button(
+            self.top_frame, text="Logout", command=self.logout)
         self.logout_button.pack(side=tk.RIGHT, padx=10, pady=10)
 
     def hide_logout_button(self):
@@ -161,27 +164,201 @@ class RegisterForm(tk.Frame):
 
 
 class HotelManagementForm(tk.Frame):
-    def __init__(self, parent, role):
+    def __init__(self, parent, role, access_token):
         super().__init__(parent)
 
-        tk.Label(self, text="Room List").grid(row=0, column=0, padx=10, pady=10)
+        self.role = role
+        self.access_token = access_token
 
-        self.rooms = tk.Listbox(self)
-        self.rooms.grid(row=1, column=0, padx=10, pady=10)
+        self.room_treeview = None
 
-        # Dummy room data
-        self.rooms.insert(tk.END, "Room 101")
-        self.rooms.insert(tk.END, "Room 102")
-        self.rooms.insert(tk.END, "Room 103")
+        self.notebook = ttk.Notebook(self)
+        self.notebook.pack(fill=tk.BOTH, expand=True)
 
-        self.add_room_button = tk.Button(self, text="Add Room", command=self.add_room)
-        self.add_room_button.grid(row=2, column=0, padx=10, pady=10)
+        self.create_tabs()
 
-        if role != "manager":
-            self.add_room_button.grid_remove()
+    def create_tabs(self):
+        self.room_tab = tk.Frame(self.notebook)
+        self.booking_tab = tk.Frame(self.notebook)
 
-    def add_room(self):
-        messagebox.showinfo("Add Room", "Room added successfully!")
+        self.notebook.add(self.room_tab, text="Rooms")
+        self.notebook.add(self.booking_tab, text="Bookings")
+
+        self.room_list(self.room_tab)
+        self.booking_list(self.booking_tab)
+
+    def room_list(self, tab):
+        # Clear previous widgets
+        for widget in tab.winfo_children():
+            widget.destroy()
+
+        # Create frame to contain buttons
+        button_frame = tk.Frame(tab)
+        button_frame.pack(side=tk.TOP, anchor='nw', padx=5, pady=5)
+
+        if self.role == "manager":
+            self.add_button = tk.Button(button_frame, text="Add",
+                                        command=lambda: self.add_item(tab))
+            self.add_button.pack(side=tk.LEFT)
+
+        # Create Treeview for room list
+        columns = ("no", "room number", "type", "price", "description")
+        self.room_treeview = ttk.Treeview(tab, columns=columns, show='headings')
+        self.room_treeview.heading("no", text="NO")
+        self.room_treeview.heading("room number", text="Room number")
+        self.room_treeview.heading("type", text="Type")
+        self.room_treeview.heading("price", text="Price")
+        self.room_treeview.heading("description", text="Description")
+        self.room_treeview.pack(fill=tk.BOTH, expand=True)
+
+        api_url = "http://127.0.0.1:8000/api/hotel/rooms/"
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        response = requests.get(api_url, headers=headers)
+        rooms = response.json()['data'] if response.status_code == 200 else []
+
+        for idx,room in enumerate(rooms):
+            self.room_treeview.insert("", "end", values=(
+                idx+1,
+                room['room_number'],
+                room['room_type'],
+                room['room_price'],
+                room['room_description']
+                )
+            )
+
+        if self.role == "manager":
+            for child in self.room_treeview.get_children():
+                self.room_treeview.item(child, tags=("editable",))
+
+            self.update_button = tk.Button(
+                button_frame, text="Update",
+                command=self.update_selected_room, state="disabled")
+            self.delete_button = tk.Button(
+                button_frame, text="Delete",
+                command=self.delete_selected_room, state="disabled")
+            # self.room_treeview.bind("<ButtonRelease-1>", self.check_selection)
+            # self.room_treeview.bind("<ButtonRelease-3>", self.check_selection)
+
+            # Place buttons on top of Treeview
+            self.update_button.pack(side=tk.LEFT, padx=5, pady=5)
+            self.delete_button.pack(side=tk.LEFT, padx=5, pady=5)
+
+        self.room_treeview.bind("<ButtonRelease-1>", self.check_selection)
+        self.room_treeview.bind("<ButtonRelease-3>", self.check_selection)
+        self.clear_selection_button = tk.Button(
+            button_frame, text="Clear Selection",
+            command=self.clear_selection, state="disabled")
+        self.clear_selection_button.pack(side=tk.LEFT)
+
+    def check_selection(self, event):
+        item = self.room_treeview.selection()
+        if item and self.role=="manager":
+            self.add_button.config(state="disabled")
+            self.update_button.config(state="normal")
+            self.delete_button.config(state="normal")
+            self.clear_selection_button.config(state="normal")
+        else:
+            self.clear_selection_button.config(state="normal")
+
+    def update_selected_room(self):
+        selected_item = self.room_treeview.selection()
+        room_id = self.room_treeview.item(selected_item, "values")[0]
+        # Implement logic to update room
+
+    def delete_selected_room(self):
+        selected_item = self.room_treeview.selection()
+        room_id = self.room_treeview.item(selected_item, "values")[0]
+
+    def clear_selection(self):
+        self.room_treeview.selection_remove(self.room_treeview.selection())
+        if self.role == "manager":
+            self.add_button.config(state="normal")
+            self.update_button.config(state="disabled")
+            self.delete_button.config(state="disabled")
+            self.clear_selection_button.config(state="disabled")
+        else:
+            self.clear_selection_button.config(state="disabled")
+
+    def booking_list(self, tab):
+        # Clear previous widgets
+        for widget in tab.winfo_children():
+            widget.destroy()
+
+        # Create frame to contain buttons
+        button_frame = tk.Frame(tab)
+        button_frame.pack(side=tk.TOP, anchor='nw', padx=5, pady=5)
+
+        if self.role == "manager":
+            self.add_button = tk.Button(button_frame, text="Add",
+                                        command=lambda: self.add_item(tab))
+            self.add_button.pack(side=tk.LEFT)
+
+        # Create Treeview for room list
+        # columns = ("no", "room number", "type", "price", "description")
+        # self.room_treeview = ttk.Treeview(tab, columns=columns, show='headings')
+        # self.room_treeview.heading("no", text="NO")
+        # self.room_treeview.heading("room number", text="Room number")
+        # self.room_treeview.heading("type", text="Type")
+        # self.room_treeview.heading("price", text="Price")
+        # self.room_treeview.heading("description", text="Description")
+        # self.room_treeview.pack(fill=tk.BOTH, expand=True)
+
+        # api_url = "http://127.0.0.1:8000/api/hotel/rooms/"
+        # headers = {"Authorization": f"Bearer {self.access_token}"}
+        # response = requests.get(api_url, headers=headers)
+        # rooms = response.json()['data'] if response.status_code == 200 else []
+
+        # for idx,room in enumerate(rooms):
+        #     self.room_treeview.insert("", "end", values=(
+        #         idx+1,
+        #         room['room_number'],
+        #         room['room_type'],
+        #         room['room_price'],
+        #         room['room_description']
+        #         )
+        #     )
+
+        # if self.role == "manager":
+        #     for child in self.room_treeview.get_children():
+        #         self.room_treeview.item(child, tags=("editable",))
+
+        #     self.update_button = tk.Button(
+        #         button_frame, text="Update",
+        #         command=self.update_selected_room, state="disabled")
+        #     self.delete_button = tk.Button(
+        #         button_frame, text="Delete",
+        #         command=self.delete_selected_room, state="disabled")
+        #     # self.room_treeview.bind("<ButtonRelease-1>", self.check_selection)
+        #     # self.room_treeview.bind("<ButtonRelease-3>", self.check_selection)
+
+        #     # Place buttons on top of Treeview
+        #     self.update_button.pack(side=tk.LEFT, padx=5, pady=5)
+        #     self.delete_button.pack(side=tk.LEFT, padx=5, pady=5)
+
+        # self.room_treeview.bind("<ButtonRelease-1>", self.check_selection)
+        # self.room_treeview.bind("<ButtonRelease-3>", self.check_selection)
+        # self.clear_selection_button = tk.Button(
+        #     button_frame, text="Clear Selection",
+        #     command=self.clear_selection, state="disabled")
+        # self.clear_selection_button.pack(side=tk.LEFT)
+
+    def add_item(self, tab):
+        if tab==self.room_tab:
+            messagebox.showinfo("Message", "Room tab")
+        else:
+            messagebox.showinfo("Message", "Booking tab")
+
+    def update_room(self, room_id):
+        # Implement logic to update a room
+        pass
+
+    def delete_room(self, room_id):
+        # Implement logic to delete a room
+        pass
+
+    def clear_container(self):
+        for widget in self.container.winfo_children():
+            widget.destroy()
 
 if __name__ == "__main__":
     app = MainApplication()

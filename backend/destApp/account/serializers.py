@@ -2,7 +2,6 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.contrib.auth import authenticate
 from rest_framework_simplejwt.tokens import RefreshToken
-from django.contrib.auth import get_user_model
 
 
 User = get_user_model()
@@ -47,6 +46,7 @@ class UserLoginSerializer(serializers.Serializer):
         refresh = RefreshToken.for_user(user)
         return {
             'username': user.username,
+            'role': User.objects.get(username=user.username).role,
             'access_token': str(refresh.access_token),
             'refresh_token': str(refresh)
         }

@@ -20,7 +20,7 @@ class Room(models.Model):
 class Booking(models.Model):
     guest = models.CharField(max_length=50)
     room = models.ForeignKey(Room, on_delete=models.CASCADE)
-    booking_time = models.DateTimeField()
+    booking_time = models.DateTimeField(auto_now_add=True)
     start_time = models.DateField()
     end_time = models.DateField()
     check_in = models.DateField(blank=True, null=True)

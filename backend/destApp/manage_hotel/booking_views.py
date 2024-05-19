@@ -95,4 +95,4 @@ class EditBookingView(APIView):
                             status=status.HTTP_404_NOT_FOUND)
         booking.delete()
         return Response({"message": "Delete Successfully"},
-                        status=status.HTTP_200_OK)
+                        status=status.HTTP_204_NO_CONTENT)

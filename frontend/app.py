@@ -171,6 +171,9 @@ class HotelManagementForm(tk.Frame):
         self.access_token = access_token
 
         self.room_treeview = None
+        self.booking_treeview = None
+        self.room_ids = {}
+        self.booking_ids = {}
 
         self.notebook = ttk.Notebook(self)
         self.notebook.pack(fill=tk.BOTH, expand=True)
@@ -197,9 +200,9 @@ class HotelManagementForm(tk.Frame):
         button_frame.pack(side=tk.TOP, anchor='nw', padx=5, pady=5)
 
         if self.role == "manager":
-            self.add_button = tk.Button(button_frame, text="Add",
-                                        command=lambda: self.add_item(tab))
-            self.add_button.pack(side=tk.LEFT)
+            self.add_room_button = tk.Button(button_frame, text="Add",
+                                        command=self.show_add_room_form)
+            self.add_room_button.pack(side=tk.LEFT)
 
         # Create Treeview for room list
         columns = ("no", "room number", "type", "price", "description")
@@ -211,73 +214,202 @@ class HotelManagementForm(tk.Frame):
         self.room_treeview.heading("description", text="Description")
         self.room_treeview.pack(fill=tk.BOTH, expand=True)
 
-        api_url = "http://127.0.0.1:8000/api/hotel/rooms/"
-        headers = {"Authorization": f"Bearer {self.access_token}"}
-        response = requests.get(api_url, headers=headers)
-        rooms = response.json()['data'] if response.status_code == 200 else []
-
-        for idx,room in enumerate(rooms):
-            self.room_treeview.insert("", "end", values=(
-                idx+1,
-                room['room_number'],
-                room['room_type'],
-                room['room_price'],
-                room['room_description']
-                )
-            )
+        self.load_rooms()
 
         if self.role == "manager":
             for child in self.room_treeview.get_children():
                 self.room_treeview.item(child, tags=("editable",))
 
-            self.update_button = tk.Button(
+            self.update_room_button = tk.Button(
                 button_frame, text="Update",
-                command=self.update_selected_room, state="disabled")
-            self.delete_button = tk.Button(
+                command=self.show_update_room_form, state="disabled")
+            self.delete_room_button = tk.Button(
                 button_frame, text="Delete",
                 command=self.delete_selected_room, state="disabled")
-            # self.room_treeview.bind("<ButtonRelease-1>", self.check_selection)
-            # self.room_treeview.bind("<ButtonRelease-3>", self.check_selection)
 
             # Place buttons on top of Treeview
-            self.update_button.pack(side=tk.LEFT, padx=5, pady=5)
-            self.delete_button.pack(side=tk.LEFT, padx=5, pady=5)
+            self.update_room_button.pack(side=tk.LEFT, padx=5, pady=5)
+            self.delete_room_button.pack(side=tk.LEFT, padx=5, pady=5)
 
-        self.room_treeview.bind("<ButtonRelease-1>", self.check_selection)
-        self.room_treeview.bind("<ButtonRelease-3>", self.check_selection)
-        self.clear_selection_button = tk.Button(
+        self.room_treeview.bind("<ButtonRelease-1>", self.check_room_selection)
+        # self.room_treeview.bind("<ButtonRelease-3>", self.check_selection)
+        self.clear_room_selection_button = tk.Button(
             button_frame, text="Clear Selection",
-            command=self.clear_selection, state="disabled")
-        self.clear_selection_button.pack(side=tk.LEFT)
+            command=self.clear_room_selection, state="disabled")
+        self.clear_room_selection_button.pack(side=tk.LEFT)
 
-    def check_selection(self, event):
+    def load_rooms(self):
+        api_url = "http://127.0.0.1:8000/api/hotel/rooms/"
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        response = requests.get(api_url, headers=headers)
+        rooms = response.json()['data'] if response.status_code == 200 else []
+
+        self.room_ids = {}
+        for idx, room in enumerate(rooms):
+            self.room_treeview.insert("", "end", values=(
+                idx + 1,
+                room['room_number'],
+                room['room_type'],
+                room['room_price'],
+                room['room_description']
+            ))
+            self.room_ids[idx+1] = room['id']
+
+    def check_room_selection(self, event):
         item = self.room_treeview.selection()
         if item and self.role=="manager":
-            self.add_button.config(state="disabled")
-            self.update_button.config(state="normal")
-            self.delete_button.config(state="normal")
-            self.clear_selection_button.config(state="normal")
+            self.add_room_button.config(state="disabled")
+            self.update_room_button.config(state="normal")
+            self.delete_room_button.config(state="normal")
+            self.clear_room_selection_button.config(state="normal")
         else:
-            self.clear_selection_button.config(state="normal")
+            self.clear_room_selection_button.config(state="normal")
 
-    def update_selected_room(self):
+    def clear_room_selection(self):
+        self.room_treeview.selection_remove(self.room_treeview.selection())
+        if self.role == "manager":
+            self.add_room_button.config(state="normal")
+            self.update_room_button.config(state="disabled")
+            self.delete_room_button.config(state="disabled")
+            self.clear_room_selection_button.config(state="disabled")
+        else:
+            self.clear_room_selection_button.config(state="disabled")
+
+    def show_add_room_form(self):
+        add_room_window = tk.Toplevel(self)
+        add_room_window.title("Add Room")
+
+        tk.Label(add_room_window, text="Room Number:").grid(row=0, column=0, padx=5, pady=5)
+        room_number_entry = tk.Entry(add_room_window)
+        room_number_entry.grid(row=0, column=1, padx=5, pady=5)
+
+        tk.Label(add_room_window, text="Type:").grid(row=1, column=0, padx=5, pady=5)
+        type_entry = tk.Entry(add_room_window)
+        type_entry.grid(row=1, column=1, padx=5, pady=5)
+
+        tk.Label(add_room_window, text="Price:").grid(row=2, column=0, padx=5, pady=5)
+        price_entry = tk.Entry(add_room_window)
+        price_entry.grid(row=2, column=1, padx=5, pady=5)
+
+        tk.Label(add_room_window, text="Description:").grid(row=3, column=0, padx=5, pady=5)
+        description_entry = tk.Entry(add_room_window)
+        description_entry.grid(row=3, column=1, padx=5, pady=5)
+
+        def save_room():
+            room_number = room_number_entry.get()
+            room_type = type_entry.get()
+            room_price = price_entry.get()
+            room_description = description_entry.get()
+
+            new_room = {
+                "room_number": room_number,
+                "room_type": room_type,
+                "room_price": room_price,
+                "room_description": room_description
+            }
+            api_url = "http://127.0.0.1:8000/api/hotel/rooms/new"
+            headers = {"Authorization": f"Bearer {self.access_token}"}
+            response = requests.post(api_url, headers=headers, json=new_room)
+            if response.status_code == 201:
+                room_data = response.json()['data']
+                new_room_id = len(self.room_treeview.get_children()) + 1
+                self.room_treeview.insert("", "end", values=(
+                    new_room_id,
+                    room_data['room_number'],
+                    room_data['room_type'],
+                    room_data['room_price'],
+                    room_data['room_description']
+                ))
+                messagebox.showinfo("Success", "Room added successfully")
+                add_room_window.destroy()
+            else:
+                messagebox.showerror("Error", "Failed to add room")
+
+        save_button = tk.Button(add_room_window, text="Save", command=save_room)
+        save_button.grid(row=4, column=0, columnspan=2, pady=10)
+
+    def show_update_room_form(self):
         selected_item = self.room_treeview.selection()
-        room_id = self.room_treeview.item(selected_item, "values")[0]
-        # Implement logic to update room
+        selected_item_id = self.room_treeview.item(selected_item, "values")[0]
+        room_id = self.room_ids.get(int(selected_item_id))
+
+        api_url = f"http://127.0.0.1:8000/api/hotel/rooms/{room_id}"
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        response = requests.get(api_url, headers=headers)
+        if response.status_code != 200:
+            messagebox.showerror("Error", "Failed to get room details")
+            return
+
+        room_data = response.json()['data']
+
+        update_room_window = tk.Toplevel(self)
+        update_room_window.title("Update Room")
+
+        tk.Label(update_room_window, text="Room Number:").grid(row=0, column=0, padx=5, pady=5)
+        room_number_entry = tk.Entry(update_room_window)
+        room_number_entry.insert(0, room_data['room_number'])
+        room_number_entry.grid(row=0, column=1, padx=5, pady=5)
+
+        tk.Label(update_room_window, text="Type:").grid(row=1, column=0, padx=5, pady=5)
+        type_entry = tk.Entry(update_room_window)
+        type_entry.insert(0, room_data['room_type'])
+        type_entry.grid(row=1, column=1, padx=5, pady=5)
+
+        tk.Label(update_room_window, text="Price:").grid(row=2, column=0, padx=5, pady=5)
+        price_entry = tk.Entry(update_room_window)
+        price_entry.insert(0, room_data['room_price'])
+        price_entry.grid(row=2, column=1, padx=5, pady=5)
+
+        tk.Label(update_room_window, text="Description:").grid(row=3, column=0, padx=5, pady=5)
+        description_entry = tk.Entry(update_room_window)
+        description_entry.insert(0, room_data['room_description'])
+        description_entry.grid(row=3, column=1, padx=5, pady=5)
+
+        def save_updated_room():
+            updated_room = {
+                "room_number": room_number_entry.get(),
+                "room_type": type_entry.get(),
+                "room_price": price_entry.get(),
+                "room_description": description_entry.get()
+            }
+            headers = {"Authorization": f"Bearer {self.access_token}"}
+            response = requests.put(api_url, headers=headers, json=updated_room)
+            if response.status_code == 200:
+                self.room_treeview.item(selected_item, values=(
+                    int(selected_item_id),
+                    updated_room['room_number'],
+                    updated_room['room_type'],
+                    updated_room['room_price'],
+                    updated_room['room_description']
+                ))
+                messagebox.showinfo("Success", "Room updated successfully")
+                update_room_window.destroy()
+            else:
+                messagebox.showerror("Error", "Failed to update room")
+
+        save_button = tk.Button(update_room_window, text="Save", command=save_updated_room)
+        save_button.grid(row=4, column=0, columnspan=2, pady=10)
 
     def delete_selected_room(self):
         selected_item = self.room_treeview.selection()
-        room_id = self.room_treeview.item(selected_item, "values")[0]
+        selected_item_id = self.room_treeview.item(selected_item, "values")[0]
+        room_id = self.room_ids.get(int(selected_item_id))
 
-    def clear_selection(self):
-        self.room_treeview.selection_remove(self.room_treeview.selection())
-        if self.role == "manager":
-            self.add_button.config(state="normal")
-            self.update_button.config(state="disabled")
-            self.delete_button.config(state="disabled")
-            self.clear_selection_button.config(state="disabled")
+        api_url = f"http://127.0.0.1:8000/api/hotel/rooms/{room_id}"
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        response = requests.delete(api_url, headers=headers)
+        if response.status_code == 204:
+            self.room_treeview.delete(selected_item)
+            self.room_ids.pop(int(selected_item_id), None)
+            self.update_item_numbers()
+            messagebox.showinfo("Success", "Room deleted successfully")
         else:
-            self.clear_selection_button.config(state="disabled")
+            messagebox.showerror("Error", "Failed to delete room")
+
+    def update_item_numbers(self):
+        children = self.room_treeview.get_children()
+        for idx, child in enumerate(children, start=1):
+            self.room_treeview.item(child, values=(idx,) + self.room_treeview.item(child, "values")[1:])
 
     def booking_list(self, tab):
         # Clear previous widgets
@@ -289,72 +421,247 @@ class HotelManagementForm(tk.Frame):
         button_frame.pack(side=tk.TOP, anchor='nw', padx=5, pady=5)
 
         if self.role == "manager":
-            self.add_button = tk.Button(button_frame, text="Add",
-                                        command=lambda: self.add_item(tab))
-            self.add_button.pack(side=tk.LEFT)
+            self.add_booking_button = tk.Button(button_frame, text="Add",
+                                        command=self.show_add_booking_form)
+            self.add_booking_button.pack(side=tk.LEFT)
 
-        # Create Treeview for room list
-        # columns = ("no", "room number", "type", "price", "description")
-        # self.room_treeview = ttk.Treeview(tab, columns=columns, show='headings')
-        # self.room_treeview.heading("no", text="NO")
-        # self.room_treeview.heading("room number", text="Room number")
-        # self.room_treeview.heading("type", text="Type")
-        # self.room_treeview.heading("price", text="Price")
-        # self.room_treeview.heading("description", text="Description")
-        # self.room_treeview.pack(fill=tk.BOTH, expand=True)
+        # Create Treeview for booking list
+        columns = ("no", "guest", "booking", "booking_time", "start_time", "end_time", "check_in", "check_out")
+        self.booking_treeview = ttk.Treeview(tab, columns=columns, show='headings')
+        self.booking_treeview.heading("no", text="NO")
+        self.booking_treeview.heading("guest", text="Guest")
+        self.booking_treeview.heading("booking", text="Room")
+        self.booking_treeview.heading("booking_time", text="Booking Time")
+        self.booking_treeview.heading("start_time", text="Start")
+        self.booking_treeview.heading("end_time", text="End")
+        self.booking_treeview.heading("end_time", text="End")
+        self.booking_treeview.heading("check_in", text="Checkin")
+        self.booking_treeview.heading("check_out", text="Checkout")
+        self.booking_treeview.pack(fill=tk.BOTH, expand=True)
 
-        # api_url = "http://127.0.0.1:8000/api/hotel/rooms/"
-        # headers = {"Authorization": f"Bearer {self.access_token}"}
-        # response = requests.get(api_url, headers=headers)
-        # rooms = response.json()['data'] if response.status_code == 200 else []
+        self.load_bookings()
 
-        # for idx,room in enumerate(rooms):
-        #     self.room_treeview.insert("", "end", values=(
-        #         idx+1,
-        #         room['room_number'],
-        #         room['room_type'],
-        #         room['room_price'],
-        #         room['room_description']
-        #         )
-        #     )
+        if self.role == "manager":
+            for child in self.booking_treeview.get_children():
+                self.booking_treeview.item(child, tags=("editable",))
 
-        # if self.role == "manager":
-        #     for child in self.room_treeview.get_children():
-        #         self.room_treeview.item(child, tags=("editable",))
+            self.update_booking_button = tk.Button(
+                button_frame, text="Update",
+                command=self.show_update_booking_form, state="disabled")
+            self.delete_booking_button = tk.Button(
+                button_frame, text="Delete",
+                command=self.delete_selected_booking, state="disabled")
 
-        #     self.update_button = tk.Button(
-        #         button_frame, text="Update",
-        #         command=self.update_selected_room, state="disabled")
-        #     self.delete_button = tk.Button(
-        #         button_frame, text="Delete",
-        #         command=self.delete_selected_room, state="disabled")
-        #     # self.room_treeview.bind("<ButtonRelease-1>", self.check_selection)
-        #     # self.room_treeview.bind("<ButtonRelease-3>", self.check_selection)
+            # Place buttons on top of Treeview
+            self.update_booking_button.pack(side=tk.LEFT, padx=5, pady=5)
+            self.delete_booking_button.pack(side=tk.LEFT, padx=5, pady=5)
 
-        #     # Place buttons on top of Treeview
-        #     self.update_button.pack(side=tk.LEFT, padx=5, pady=5)
-        #     self.delete_button.pack(side=tk.LEFT, padx=5, pady=5)
+        self.booking_treeview.bind("<ButtonRelease-1>", self.check_booking_selection)
+        # self.booking_treeview.bind("<ButtonRelease-3>", self.check_booking_selection)
+        self.clear_booking_selection_button = tk.Button(
+            button_frame, text="Clear Selection",
+            command=self.clear_booking_selection, state="disabled")
+        self.clear_booking_selection_button.pack(side=tk.LEFT)
 
-        # self.room_treeview.bind("<ButtonRelease-1>", self.check_selection)
-        # self.room_treeview.bind("<ButtonRelease-3>", self.check_selection)
-        # self.clear_selection_button = tk.Button(
-        #     button_frame, text="Clear Selection",
-        #     command=self.clear_selection, state="disabled")
-        # self.clear_selection_button.pack(side=tk.LEFT)
+    def load_bookings(self):
+        api_url = "http://127.0.0.1:8000/api/hotel/bookings/"
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        response = requests.get(api_url, headers=headers)
+        bookings = response.json()['data'] if response.status_code == 200 else []
 
-    def add_item(self, tab):
-        if tab==self.room_tab:
-            messagebox.showinfo("Message", "Room tab")
+        self.booking_ids = {}
+        for idx, booking in enumerate(bookings):
+            self.booking_treeview.insert("", "end", values=(
+                idx + 1,
+                booking['guest'],
+                booking['room__id'],
+                booking['booking_time'],
+                booking['start_time'],
+				booking['end_time'],
+				booking['check_in'],
+				booking['check_out']
+            ))
+            self.booking_ids[idx+1] = booking['id']
+
+    def check_booking_selection(self, event):
+        item = self.booking_treeview.selection()
+        if item and self.role=="manager":
+            self.add_booking_button.config(state="disabled")
+            self.update_button.config(state="normal")
+            self.delete_button.config(state="normal")
+            self.clear_selection_button.config(state="normal")
         else:
-            messagebox.showinfo("Message", "Booking tab")
+            self.clear_selection_button.config(state="normal")
 
-    def update_room(self, room_id):
-        # Implement logic to update a room
-        pass
+    def clear_booking_selection(self):
+        self.booking_treeview.selection_remove(self.booking_treeview.selection())
+        if self.role == "manager":
+            self.add_button.config(state="normal")
+            self.update_button.config(state="disabled")
+            self.delete_button.config(state="disabled")
+            self.clear_selection_button.config(state="disabled")
+        else:
+            self.clear_selection_button.config(state="disabled")
 
-    def delete_room(self, room_id):
-        # Implement logic to delete a room
-        pass
+    def show_add_booking_form(self):
+        add_booking_window = tk.Toplevel(self)
+        add_booking_window.title("New Booking")
+
+        tk.Label(add_booking_window, text="Guest:").grid(row=0, column=0, padx=5, pady=5)
+        guest_entry = tk.Entry(add_booking_window)
+        guest_entry.grid(row=0, column=1, padx=5, pady=5)
+
+        tk.Label(add_booking_window, text="Room:").grid(row=1, column=0, padx=5, pady=5)
+        room_entry = tk.Entry(add_booking_window)
+        room_entry.grid(row=1, column=1, padx=5, pady=5)
+
+        tk.Label(add_booking_window, text="Start:").grid(row=2, column=0, padx=5, pady=5)
+        start_entry = tk.Entry(add_booking_window)
+        start_entry.grid(row=2, column=1, padx=5, pady=5)
+
+        tk.Label(add_booking_window, text="End:").grid(row=3, column=0, padx=5, pady=5)
+        end_entry = tk.Entry(add_booking_window)
+        end_entry.grid(row=3, column=1, padx=5, pady=5)
+		
+        tk.Label(add_booking_window, text="Checkin:").grid(row=3, column=0, padx=5, pady=5)
+        checkin_entry = tk.Entry(add_booking_window)
+        checkin_entry.grid(row=3, column=1, padx=5, pady=5)
+
+        def save_booking():
+            guest = guest_entry.get()
+            room = room_entry.get()
+            start_time = start_entry.get()
+            end_time = end_entry.get()
+            check_in = checkin_entry.get()
+
+            new_booking = {
+                "guest": guest,
+                "room": room,
+                "start_time": start_time,
+                "end_time": end_time,
+				"check_in": check_in
+            }
+            api_url = "http://127.0.0.1:8000/api/hotel/bookings/new"
+            headers = {"Authorization": f"Bearer {self.access_token}"}
+            response = requests.post(api_url, headers=headers, json=new_booking)
+            if response.status_code == 201:
+                booking_data = response.json()['data']
+                new_booking_id = len(self.booking_treeview.get_children()) + 1
+                self.booking_treeview.insert("", "end", values=(
+                    new_booking_id,
+                    new_booking['guest'],
+					new_booking['room__id'],
+					new_booking['booking_time'],
+					new_booking['start_time'],
+					new_booking['end_time'],
+					new_booking['check_in'],
+					new_booking['check_out']
+                ))
+                messagebox.showinfo("Success", "Booking added successfully")
+                add_booking_window.destroy()
+            else:
+                messagebox.showerror("Error", "Failed to add booking")
+
+        save_button = tk.Button(add_booking_window, text="Save", command=save_booking)
+        save_button.grid(row=4, column=0, columnspan=2, pady=10)
+
+    def show_update_booking_form(self):
+        selected_item = self.booking_treeview.selection()
+        selected_item_id = self.booking_treeview.item(selected_item, "values")[0]
+        booking_id = self.booking_ids.get(int(selected_item_id))
+
+        api_url = f"http://127.0.0.1:8000/api/hotel/bookings/{booking_id}"
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        response = requests.get(api_url, headers=headers)
+        if response.status_code != 200:
+            messagebox.showerror("Error", "Failed to get booking details")
+            return
+
+        booking_data = response.json()['data']
+
+        update_booking_window = tk.Toplevel(self)
+        update_booking_window.title("Update Booking")
+
+        tk.Label(update_booking_window, text="Guest:").grid(row=0, column=0, padx=5, pady=5)
+        guest_entry = tk.Entry(update_booking_window)
+        guest_entry.insert(0, booking_data['guest'])
+        guest_entry.grid(row=0, column=1, padx=5, pady=5)
+
+        tk.Label(update_booking_window, text="Room:").grid(row=1, column=0, padx=5, pady=5)
+        room_entry = tk.Entry(update_booking_window)
+        room_entry.insert(0, booking_data['room__id'])
+        room_entry.grid(row=1, column=1, padx=5, pady=5)
+
+        tk.Label(update_booking_window, text="Start:").grid(row=2, column=0, padx=5, pady=5)
+        start_entry = tk.Entry(update_booking_window)
+        start_entry.insert(0, booking_data['start_time'])
+        start_entry.grid(row=2, column=1, padx=5, pady=5)
+
+        tk.Label(update_booking_window, text="End:").grid(row=3, column=0, padx=5, pady=5)
+        end_entry = tk.Entry(update_booking_window)
+        end_entry.insert(0, booking_data['end_time'])
+        end_entry.grid(row=3, column=1, padx=5, pady=5)
+		
+        tk.Label(update_booking_window, text="Checkin:").grid(row=3, column=0, padx=5, pady=5)
+        checkin_entry = tk.Entry(update_booking_window)
+        checkin_entry.insert(0, booking_data['check_in'])
+        checkin_entry.grid(row=3, column=1, padx=5, pady=5)
+		
+        tk.Label(update_booking_window, text="Checkout:").grid(row=3, column=0, padx=5, pady=5)
+        checkout_entry = tk.Entry(update_booking_window)
+        checkout_entry.insert(0, booking_data['check_out'])
+        checkout_entry.grid(row=3, column=1, padx=5, pady=5)
+
+        def save_updated_booking():
+            updated_booking = {
+				"guest": guest_entry.get(),
+                "room": room_entry.get(),
+                "start_time": start_entry.get(),
+                "end_time": end_entry.get(),
+				"check_in": checkin_entry.get(),
+				"check_in": checkout_entry.get()
+            }
+            headers = {"Authorization": f"Bearer {self.access_token}"}
+            response = requests.put(api_url, headers=headers, json=updated_booking)
+            if response.status_code == 200:
+                self.booking_treeview.item(selected_item, values=(
+                    int(selected_item_id),
+                    response['data']['guest'],
+					response['data']['room__id'],
+					response['data']['booking_time'],
+					response['data']['start_time'],
+					response['data']['end_time'],
+					response['data']['check_in'],
+					response['data']['check_out']
+                ))
+                messagebox.showinfo("Success", "Booking updated successfully")
+                update_booking_window.destroy()
+            else:
+                messagebox.showerror("Error", "Failed to update booking")
+
+        save_button = tk.Button(update_booking_window, text="Save", command=save_updated_booking)
+        save_button.grid(row=4, column=0, columnspan=2, pady=10)
+
+    def delete_selected_booking(self):
+        selected_item = self.booking_treeview.selection()
+        selected_item_id = self.booking_treeview.item(selected_item, "values")[0]
+        booking_id = self.booking_ids.get(int(selected_item_id))
+
+        api_url = f"http://127.0.0.1:8000/api/hotel/bookings/{booking_id}"
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        response = requests.delete(api_url, headers=headers)
+        if response.status_code == 204:
+            self.booking_treeview.delete(selected_item)
+            self.booking_ids.pop(int(selected_item_id), None)
+            self.update_item_numbers()
+            messagebox.showinfo("Success", "Room deleted successfully")
+        else:
+            messagebox.showerror("Error", "Failed to delete booking")
+
+    def update_item_numbers(self):
+        children = self.booking_treeview.get_children()
+        for idx, child in enumerate(children, start=1):
+            self.booking_treeview.item(child, values=(idx,) + self.booking_treeview.item(child, "values")[1:])
 
     def clear_container(self):
         for widget in self.container.winfo_children():

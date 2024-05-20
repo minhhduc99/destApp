@@ -1,6 +1,8 @@
-import requests
+from datetime import datetime
 import tkinter as tk
 from tkinter import messagebox, ttk
+import requests
+from tkcalendar import DateEntry
 
 
 class MainApplication(tk.Tk):
@@ -18,6 +20,8 @@ class MainApplication(tk.Tk):
 
         self.access_token = None
         self.refresh_token = None
+        self.username = None
+        self.username_label = None
 
         self.show_login_form()
 
@@ -32,21 +36,29 @@ class MainApplication(tk.Tk):
         register_form = RegisterForm(self.container, self.show_login_form)
         register_form.pack(fill=tk.BOTH, expand=True)
 
-    def login_success(self, role, access_token, refresh_token):
+    def login_success(self, role, access_token, refresh_token, username):
         self.access_token = access_token
         self.refresh_token = refresh_token
-        self.show_hotel_management_form(role, access_token)
+        self.username = username
+        self.show_hotel_management_form(role, access_token, username)
 
-    def show_hotel_management_form(self, role, access_token):
+    def show_hotel_management_form(self, role, access_token, username):
         self.clear_container()
         hotel_management_form = HotelManagementForm(
             self.container, role, access_token)
         hotel_management_form.pack(fill=tk.BOTH, expand=True)
+        self.show_user_name(username)
         self.show_logout_button()
 
     def clear_container(self):
         for widget in self.container.winfo_children():
             widget.destroy()
+
+    def show_user_name(self, username):
+        if self.username_label:
+            self.username_label.destroy()
+        self.username_label = tk.Label(self.top_frame, text=f"Welcome, {username}")
+        self.username_label.pack(side=tk.LEFT, padx=10, pady=10)
 
     def show_logout_button(self):
         self.logout_button = tk.Button(
@@ -68,6 +80,7 @@ class MainApplication(tk.Tk):
                 self.hide_logout_button()
                 self.access_token = None
                 self.refresh_token = None
+                self.username = None
                 self.show_login_form()
                 messagebox.showinfo("Message", "You have been logged out successfully")
             else:
@@ -106,12 +119,18 @@ class LoginForm(tk.Frame):
         # Check the response
         if response.status_code == 200:
             user_data = response.json()
+            user_name = user_data.get('username')
             access_token = user_data.get('access_token')
             refresh_token = user_data.get('refresh_token')
             role = user_data.get('role', 'receptionist')
-            self.on_success(role, access_token, refresh_token)
+            self.on_success(role, access_token, refresh_token, user_name)
         else:
             messagebox.showerror("Login Failed", "Invalid username or password")
+            self.clear_entries()
+
+    def clear_entries(self):
+        self.username_entry.delete(0, tk.END)
+        self.password_entry.delete(0, tk.END)
 
 
 class RegisterForm(tk.Frame):
@@ -179,16 +198,25 @@ class HotelManagementForm(tk.Frame):
         self.notebook.pack(fill=tk.BOTH, expand=True)
 
         self.create_tabs()
+        self.notebook.bind("<<NotebookTabChanged>>", self.on_tab_changed)
 
     def create_tabs(self):
         self.room_tab = tk.Frame(self.notebook)
         self.booking_tab = tk.Frame(self.notebook)
+        self.statistics_tab = tk.Frame(self.notebook)
 
         self.notebook.add(self.room_tab, text="Rooms")
         self.notebook.add(self.booking_tab, text="Bookings")
+        self.notebook.add(self.statistics_tab, text="Statistics")
 
         self.room_list(self.room_tab)
-        self.booking_list(self.booking_tab)
+
+    def on_tab_changed(self, event):
+        selected_tab = event.widget.tab(event.widget.index("current"))["text"]
+        if selected_tab == "Bookings":
+            self.booking_list(self.booking_tab)
+        else:
+            self.hotel_statistics(self.statistics_tab)
 
     def room_list(self, tab):
         # Clear previous widgets
@@ -420,10 +448,9 @@ class HotelManagementForm(tk.Frame):
         button_frame = tk.Frame(tab)
         button_frame.pack(side=tk.TOP, anchor='nw', padx=5, pady=5)
 
-        if self.role == "manager":
-            self.add_booking_button = tk.Button(button_frame, text="Add",
-                                        command=self.show_add_booking_form)
-            self.add_booking_button.pack(side=tk.LEFT)
+        self.add_booking_button = tk.Button(button_frame, text="Add",
+                                    command=self.show_add_booking_form)
+        self.add_booking_button.pack(side=tk.LEFT)
 
         # Create Treeview for booking list
         columns = ("no", "guest", "booking", "booking_time", "start_time", "end_time", "check_in", "check_out")
@@ -441,20 +468,19 @@ class HotelManagementForm(tk.Frame):
 
         self.load_bookings()
 
-        if self.role == "manager":
-            for child in self.booking_treeview.get_children():
-                self.booking_treeview.item(child, tags=("editable",))
+        for child in self.booking_treeview.get_children():
+            self.booking_treeview.item(child, tags=("editable",))
 
-            self.update_booking_button = tk.Button(
-                button_frame, text="Update",
-                command=self.show_update_booking_form, state="disabled")
-            self.delete_booking_button = tk.Button(
-                button_frame, text="Delete",
-                command=self.delete_selected_booking, state="disabled")
+        self.update_booking_button = tk.Button(
+            button_frame, text="Update",
+            command=self.show_update_booking_form, state="disabled")
+        self.delete_booking_button = tk.Button(
+            button_frame, text="Delete",
+            command=self.delete_selected_booking, state="disabled")
 
-            # Place buttons on top of Treeview
-            self.update_booking_button.pack(side=tk.LEFT, padx=5, pady=5)
-            self.delete_booking_button.pack(side=tk.LEFT, padx=5, pady=5)
+        # Place buttons on top of Treeview
+        self.update_booking_button.pack(side=tk.LEFT, padx=5, pady=5)
+        self.delete_booking_button.pack(side=tk.LEFT, padx=5, pady=5)
 
         self.booking_treeview.bind("<ButtonRelease-1>", self.check_booking_selection)
         # self.booking_treeview.bind("<ButtonRelease-3>", self.check_booking_selection)
@@ -474,34 +500,32 @@ class HotelManagementForm(tk.Frame):
             self.booking_treeview.insert("", "end", values=(
                 idx + 1,
                 booking['guest'],
-                booking['room__id'],
-                booking['booking_time'],
+                booking['room'],
+                datetime.strptime(
+                    booking['booking_time'],"%Y-%m-%dT%H:%M:%S.%fZ").strftime(
+                        "%Y-%m-%d %H:%M:%S"
+                    ),
                 booking['start_time'],
 				booking['end_time'],
-				booking['check_in'],
-				booking['check_out']
+				booking['check_in'] if booking['check_in'] else "-",
+				booking['check_out'] if booking['check_out'] else "-"
             ))
             self.booking_ids[idx+1] = booking['id']
 
     def check_booking_selection(self, event):
         item = self.booking_treeview.selection()
-        if item and self.role=="manager":
+        if item:
             self.add_booking_button.config(state="disabled")
-            self.update_button.config(state="normal")
-            self.delete_button.config(state="normal")
-            self.clear_selection_button.config(state="normal")
-        else:
-            self.clear_selection_button.config(state="normal")
+            self.update_booking_button.config(state="normal")
+            self.delete_booking_button.config(state="normal")
+            self.clear_booking_selection_button.config(state="normal")
 
     def clear_booking_selection(self):
         self.booking_treeview.selection_remove(self.booking_treeview.selection())
-        if self.role == "manager":
-            self.add_button.config(state="normal")
-            self.update_button.config(state="disabled")
-            self.delete_button.config(state="disabled")
-            self.clear_selection_button.config(state="disabled")
-        else:
-            self.clear_selection_button.config(state="disabled")
+        self.add_booking_button.config(state="normal")
+        self.update_booking_button.config(state="disabled")
+        self.delete_booking_button.config(state="disabled")
+        self.clear_booking_selection_button.config(state="disabled")
 
     def show_add_booking_form(self):
         add_booking_window = tk.Toplevel(self)
@@ -512,34 +536,33 @@ class HotelManagementForm(tk.Frame):
         guest_entry.grid(row=0, column=1, padx=5, pady=5)
 
         tk.Label(add_booking_window, text="Room:").grid(row=1, column=0, padx=5, pady=5)
-        room_entry = tk.Entry(add_booking_window)
-        room_entry.grid(row=1, column=1, padx=5, pady=5)
+        # Create combobox for room selection
+        room_combobox = ttk.Combobox(add_booking_window, state="readonly")
+        room_combobox.grid(row=1, column=1, padx=5, pady=5)
 
         tk.Label(add_booking_window, text="Start:").grid(row=2, column=0, padx=5, pady=5)
-        start_entry = tk.Entry(add_booking_window)
+        start_date_var = tk.StringVar()
+        start_entry = DateEntry(add_booking_window, textvariable=start_date_var, date_pattern='yyyy-mm-dd')
         start_entry.grid(row=2, column=1, padx=5, pady=5)
 
         tk.Label(add_booking_window, text="End:").grid(row=3, column=0, padx=5, pady=5)
-        end_entry = tk.Entry(add_booking_window)
+        end_date_var = tk.StringVar()
+        end_entry = DateEntry(add_booking_window, textvariable=end_date_var, date_pattern='yyyy-mm-dd')
         end_entry.grid(row=3, column=1, padx=5, pady=5)
-		
-        tk.Label(add_booking_window, text="Checkin:").grid(row=3, column=0, padx=5, pady=5)
-        checkin_entry = tk.Entry(add_booking_window)
-        checkin_entry.grid(row=3, column=1, padx=5, pady=5)
+
+        self.load_rooms_for_booking(room_combobox)
 
         def save_booking():
             guest = guest_entry.get()
-            room = room_entry.get()
+            room = room_combobox.get()
             start_time = start_entry.get()
             end_time = end_entry.get()
-            check_in = checkin_entry.get()
 
             new_booking = {
                 "guest": guest,
                 "room": room,
                 "start_time": start_time,
-                "end_time": end_time,
-				"check_in": check_in
+                "end_time": end_time
             }
             api_url = "http://127.0.0.1:8000/api/hotel/bookings/new"
             headers = {"Authorization": f"Bearer {self.access_token}"}
@@ -549,13 +572,16 @@ class HotelManagementForm(tk.Frame):
                 new_booking_id = len(self.booking_treeview.get_children()) + 1
                 self.booking_treeview.insert("", "end", values=(
                     new_booking_id,
-                    new_booking['guest'],
-					new_booking['room__id'],
-					new_booking['booking_time'],
-					new_booking['start_time'],
-					new_booking['end_time'],
-					new_booking['check_in'],
-					new_booking['check_out']
+                    booking_data['guest'],
+					booking_data['room'],
+                    datetime.strptime(
+                        booking_data['booking_time'],"%Y-%m-%dT%H:%M:%S.%fZ").strftime(
+                        "%Y-%m-%d %H:%M:%S"
+                    ),
+					booking_data['start_time'],
+					booking_data['end_time'],
+					booking_data['check_in'] if booking_data['check_in'] else "-",
+				    booking_data['check_out'] if booking_data['check_out'] else "-"
                 ))
                 messagebox.showinfo("Success", "Booking added successfully")
                 add_booking_window.destroy()
@@ -564,6 +590,17 @@ class HotelManagementForm(tk.Frame):
 
         save_button = tk.Button(add_booking_window, text="Save", command=save_booking)
         save_button.grid(row=4, column=0, columnspan=2, pady=10)
+
+    def load_rooms_for_booking(self, room_combobox):
+        api_url = "http://127.0.0.1:8000/api/hotel/rooms/"
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        response = requests.get(api_url, headers=headers)
+        if response.status_code == 200:
+            rooms = response.json()['data']
+            room_ids = [room['id'] for room in rooms]
+            room_combobox['values'] = room_ids
+        else:
+            messagebox.showerror("Error", "Failed to load rooms")
 
     def show_update_booking_form(self):
         selected_item = self.booking_treeview.selection()
@@ -601,12 +638,12 @@ class HotelManagementForm(tk.Frame):
         end_entry = tk.Entry(update_booking_window)
         end_entry.insert(0, booking_data['end_time'])
         end_entry.grid(row=3, column=1, padx=5, pady=5)
-		
+
         tk.Label(update_booking_window, text="Checkin:").grid(row=3, column=0, padx=5, pady=5)
         checkin_entry = tk.Entry(update_booking_window)
         checkin_entry.insert(0, booking_data['check_in'])
         checkin_entry.grid(row=3, column=1, padx=5, pady=5)
-		
+
         tk.Label(update_booking_window, text="Checkout:").grid(row=3, column=0, padx=5, pady=5)
         checkout_entry = tk.Entry(update_booking_window)
         checkout_entry.insert(0, booking_data['check_out'])
@@ -619,7 +656,7 @@ class HotelManagementForm(tk.Frame):
                 "start_time": start_entry.get(),
                 "end_time": end_entry.get(),
 				"check_in": checkin_entry.get(),
-				"check_in": checkout_entry.get()
+				"check_out": checkout_entry.get()
             }
             headers = {"Authorization": f"Bearer {self.access_token}"}
             response = requests.put(api_url, headers=headers, json=updated_booking)
@@ -653,15 +690,18 @@ class HotelManagementForm(tk.Frame):
         if response.status_code == 204:
             self.booking_treeview.delete(selected_item)
             self.booking_ids.pop(int(selected_item_id), None)
-            self.update_item_numbers()
+            self.update_booking_item_numbers()
             messagebox.showinfo("Success", "Room deleted successfully")
         else:
             messagebox.showerror("Error", "Failed to delete booking")
 
-    def update_item_numbers(self):
+    def update_booking_item_numbers(self):
         children = self.booking_treeview.get_children()
         for idx, child in enumerate(children, start=1):
             self.booking_treeview.item(child, values=(idx,) + self.booking_treeview.item(child, "values")[1:])
+
+    def hotel_statistics(self, tab):
+        pass
 
     def clear_container(self):
         for widget in self.container.winfo_children():

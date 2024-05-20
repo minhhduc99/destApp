@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 import tkinter as tk
 from tkinter import messagebox, ttk
 import requests
@@ -23,6 +23,9 @@ class MainApplication(tk.Tk):
         self.username = None
         self.username_label = None
 
+        self.token_expiry = None
+        self.token_check_interval = 1000  # Interval to check token expiry in ms
+
         self.show_login_form()
 
     def show_login_form(self):
@@ -36,11 +39,13 @@ class MainApplication(tk.Tk):
         register_form = RegisterForm(self.container, self.show_login_form)
         register_form.pack(fill=tk.BOTH, expand=True)
 
-    def login_success(self, role, access_token, refresh_token, username):
+    def login_success(self, role, access_token, refresh_token, username, expires_in):
         self.access_token = access_token
         self.refresh_token = refresh_token
         self.username = username
+        self.token_expiry = expires_in
         self.show_hotel_management_form(role, access_token, username)
+        self.start_token_expiry_timer()
 
     def show_hotel_management_form(self, role, access_token, username):
         self.clear_container()
@@ -86,6 +91,38 @@ class MainApplication(tk.Tk):
             else:
                 messagebox.showerror("Message", "Failed to logout. Please try again.")
 
+    def start_token_expiry_timer(self):
+        self.check_token_expiry()
+        self.after(self.token_check_interval, self.start_token_expiry_timer)
+
+    def check_token_expiry(self):
+        if self.token_expiry:
+            time_remaining = (self.token_expiry - datetime.now()).total_seconds()
+            if time_remaining < 60:  # If less than 1 minute remaining
+                self.show_token_expiry_popup()
+
+    def show_token_expiry_popup(self):
+        response = messagebox.askyesno("Session Expiry", "Your session is about to expire. Do you want to continue?")
+        if response:
+            self.refresh_access_token()
+        else:
+            self.logout()
+
+    def refresh_access_token(self):
+        if self.refresh_token:
+            api_url = "http://127.0.0.1:8000/api/account/token/refresh"
+            data = {"refresh": self.refresh_token}
+            response = requests.post(api_url, data=data)
+
+            if response.status_code == 200:
+                user_data = response.json()
+                self.access_token = user_data.get('access')
+                expires_in = datetime.now() + timedelta(seconds=300)
+                self.token_expiry = expires_in
+                messagebox.showinfo("Message", "Session has been refreshed successfully")
+            else:
+                messagebox.showerror("Message", "Failed to refresh session. Please log in again.")
+                self.logout()
 
 class LoginForm(tk.Frame):
     def __init__(self, parent, on_success, show_register_form):
@@ -123,7 +160,8 @@ class LoginForm(tk.Frame):
             access_token = user_data.get('access_token')
             refresh_token = user_data.get('refresh_token')
             role = user_data.get('role', 'receptionist')
-            self.on_success(role, access_token, refresh_token, user_name)
+            expires_in = datetime.now() + timedelta(seconds=300)
+            self.on_success(role, access_token, refresh_token, user_name, expires_in)
         else:
             messagebox.showerror("Login Failed", "Invalid username or password")
             self.clear_entries()

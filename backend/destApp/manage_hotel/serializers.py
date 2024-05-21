@@ -15,6 +15,9 @@ class BookingSerializer(serializers.ModelSerializer):
 
 
 class BookingListSerializer(serializers.ModelSerializer):
+    room_number = serializers.SerializerMethodField()
+    def get_room_number(self, obj):
+        return obj.room.room_number
     class Meta:
         model = Booking
         fields = '__all__'

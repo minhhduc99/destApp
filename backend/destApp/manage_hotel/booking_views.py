@@ -3,13 +3,13 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from manage_hotel.models import Booking, Room
-from manage_hotel.serializers import BookingSerializer
+from manage_hotel.serializers import BookingSerializer, BookingListSerializer
 
 
 class ListBookingView(APIView):
     def get(self, request):
         bookings = Booking.objects.all()
-        serializer = BookingSerializer(bookings, many=True)
+        serializer = BookingListSerializer(bookings, many=True)
         return Response({"data": serializer.data},
                         status=status.HTTP_200_OK)
 

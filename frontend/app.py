@@ -238,6 +238,7 @@ class HotelManagementForm(tk.Frame):
         self.room_ids = {}
         self.booking_ids = {}
         self.user_ids = {}
+        self.booking_room_dict = {}
 
         self.notebook = ttk.Notebook(self)
         self.notebook.pack(fill=tk.BOTH, expand=True)
@@ -568,7 +569,7 @@ class HotelManagementForm(tk.Frame):
             self.booking_treeview.insert("", "end", values=(
                 idx + 1,
                 booking['guest'],
-                booking['room'],
+                booking['room_number'],
                 datetime.strptime(
                     booking['booking_time'],"%Y-%m-%dT%H:%M:%S.%fZ").strftime(
                         "%Y-%m-%d %H:%M:%S"
@@ -586,6 +587,7 @@ class HotelManagementForm(tk.Frame):
                 booking['booking_status']
             ))
             self.booking_ids[idx+1] = booking['id']
+            self.booking_room_dict[booking['room']] = booking['room_number']
 
     def check_booking_selection(self, event):
         item = self.booking_treeview.selection()
@@ -703,6 +705,7 @@ class HotelManagementForm(tk.Frame):
                 messagebox.showinfo("Success", "Booking added successfully")
                 add_booking_window.destroy()
                 self.booking_ids[new_booking_id] = booking_data['id']
+                self.booking_room_dict[booking_data['room']] = self.get_room_number(booking_data['room'])
             else:
                 messagebox.showerror("Error", "Failed to add booking")
 
@@ -748,7 +751,7 @@ class HotelManagementForm(tk.Frame):
 
         tk.Label(update_booking_window, text="Room:").grid(row=1, column=0, padx=5, pady=5)
         room_entry = tk.Entry(update_booking_window)
-        room_entry.insert(0, booking_data['room__id'])
+        room_entry.insert(0, booking_data['room'])
         room_entry.grid(row=1, column=1, padx=5, pady=5)
 
         tk.Label(update_booking_window, text="Start:").grid(row=2, column=0, padx=5, pady=5)
@@ -761,30 +764,12 @@ class HotelManagementForm(tk.Frame):
         end_entry.insert(0, booking_data['end_time'])
         end_entry.grid(row=3, column=1, padx=5, pady=5)
 
-        tk.Label(update_booking_window, text="Checkin:").grid(row=3, column=0, padx=5, pady=5)
-        checkin_entry = tk.Entry(update_booking_window)
-        checkin_entry.insert(0, booking_data['check_in'])
-        checkin_entry.grid(row=3, column=1, padx=5, pady=5)
-
-        tk.Label(update_booking_window, text="Checkout:").grid(row=3, column=0, padx=5, pady=5)
-        checkout_entry = tk.Entry(update_booking_window)
-        checkout_entry.insert(0, booking_data['check_out'])
-        checkout_entry.grid(row=3, column=1, padx=5, pady=5)
-
         def save_updated_booking():
-            selected_room_number = room_entry.get()
-            room = None
-            for room_id, number in self.room_dict.items():
-                if number == int(selected_room_number):
-                    room = room_id
-                    break
             updated_booking = {
 				"guest": guest_entry.get(),
-                "room": room,
+                "room": room_entry.get(),
                 "start_time": start_entry.get(),
-                "end_time": end_entry.get(),
-				"check_in": checkin_entry.get(),
-				"check_out": checkout_entry.get()
+                "end_time": end_entry.get()
             }
             headers = {"Authorization": f"Bearer {self.access_token}"}
             response = requests.put(api_url, headers=headers, json=updated_booking)
@@ -793,7 +778,7 @@ class HotelManagementForm(tk.Frame):
                 self.booking_treeview.item(selected_item, values=(
                     int(selected_item_id),
                     response_data['guest'],
-					self.get_room_number(response_data['room']),
+					self.booking_room_dict.get(response_data['room'],None),
 					datetime.strptime(
                         response_data['booking_time'],"%Y-%m-%dT%H:%M:%S.%fZ").strftime(
                         "%Y-%m-%d %H:%M:%S"
@@ -833,7 +818,7 @@ class HotelManagementForm(tk.Frame):
             self.booking_treeview.item(selected_item, values=(
                 int(selected_item_id),
                 response_data['guest'],
-                self.get_room_number(response_data['room']),
+                self.booking_room_dict.get(response_data['room'],None),
                 datetime.strptime(
                     response_data['booking_time'],"%Y-%m-%dT%H:%M:%S.%fZ").strftime(
                     "%Y-%m-%d %H:%M:%S"
@@ -857,6 +842,13 @@ class HotelManagementForm(tk.Frame):
     def delete_selected_booking(self):
         selected_item = self.booking_treeview.selection()
         selected_item_id = self.booking_treeview.item(selected_item, "values")[0]
+        i = 1
+        room=0
+        for room_id, room_number in self.booking_room_dict.items():
+            if room_number==self.booking_treeview.item(selected_item, "values")[2] and \
+                i == int(selected_item_id):
+                room = room_id
+            i += 1
         booking_id = self.booking_ids.get(int(selected_item_id))
 
         api_url = f"http://127.0.0.1:8000/api/hotel/bookings/{booking_id}/"
@@ -865,6 +857,7 @@ class HotelManagementForm(tk.Frame):
         if response.status_code == 204:
             self.booking_treeview.delete(selected_item)
             self.booking_ids.pop(int(selected_item_id), None)
+            self.booking_room_dict.pop(room, None)
             self.update_booking_item_numbers()
             self.clear_booking_selection()
             messagebox.showinfo("Success", "Booking deleted successfully")

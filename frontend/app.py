@@ -247,10 +247,13 @@ class HotelManagementForm(tk.Frame):
         self.room_tab = tk.Frame(self.notebook)
         self.booking_tab = tk.Frame(self.notebook)
         self.statistics_tab = tk.Frame(self.notebook)
+        self.users_tab = tk.Frame(self.notebook)
 
         self.notebook.add(self.room_tab, text="Rooms")
         self.notebook.add(self.booking_tab, text="Bookings")
-        self.notebook.add(self.statistics_tab, text="Statistics")
+        if self.role == "manager":
+            self.notebook.add(self.statistics_tab, text="Statistics")
+            self.notebook.add(self.users_tab, text="Users")
 
         self.room_list(self.room_tab)
 
@@ -260,8 +263,10 @@ class HotelManagementForm(tk.Frame):
             self.room_list(self.room_tab)
         elif selected_tab == "Bookings":
             self.booking_list(self.booking_tab)
-        else:
+        elif selected_tab == "Statistics":
             self.hotel_statistics(self.statistics_tab)
+        elif selected_tab == "Users":
+            self.load_users(self.users_tab)
 
     def room_list(self, tab):
         # Clear previous widgets
@@ -870,6 +875,32 @@ class HotelManagementForm(tk.Frame):
             self.booking_treeview.item(child, values=(idx,) + self.booking_treeview.item(child, "values")[1:])
 
     def hotel_statistics(self, tab):
+        for widget in self.statistics_tab.winfo_children():
+            widget.destroy()
+
+        api_url = "http://127.0.0.1:8000/api/hotel/statistics"
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        response = requests.get(api_url, headers=headers)
+        if response.status_code == 200:
+            statistics = response.json()['data']
+            total_bookings = statistics['total_bookings']
+            total_revenue = statistics['total_revenue']
+            revenue_by_room_type = statistics['revenue_by_room_type']
+
+            # Display total_bookings
+            tk.Label(self.statistics_tab, text=f"Total Bookings: {total_bookings}", anchor='w').pack(fill='x', pady=5)
+
+            # Display total_revenue
+            tk.Label(self.statistics_tab, text=f"Total Revenue: ${total_revenue}", anchor='w').pack(fill='x', pady=5)
+
+            # Display revenue_by_room_type
+            tk.Label(self.statistics_tab, text="Revenue by Room Type:", anchor='w').pack(fill='x', pady=5)
+            for obj in revenue_by_room_type:
+                tk.Label(self.statistics_tab, text=f"- {obj['room_type']}: ${obj['total_revenue']}", anchor='w').pack(fill='x', pady=2)
+        else:
+            messagebox.showerror("Error", "Failed to load statistics")
+
+    def load_users(self, tab):
         pass
 
     def clear_container(self):

@@ -234,8 +234,10 @@ class HotelManagementForm(tk.Frame):
 
         self.room_treeview = None
         self.booking_treeview = None
+        self.user_treeview = None
         self.room_ids = {}
         self.booking_ids = {}
+        self.user_ids = {}
 
         self.notebook = ttk.Notebook(self)
         self.notebook.pack(fill=tk.BOTH, expand=True)
@@ -266,7 +268,7 @@ class HotelManagementForm(tk.Frame):
         elif selected_tab == "Statistics":
             self.hotel_statistics(self.statistics_tab)
         elif selected_tab == "Users":
-            self.load_users(self.users_tab)
+            self.user_list(self.users_tab)
 
     def room_list(self, tab):
         # Clear previous widgets
@@ -900,8 +902,88 @@ class HotelManagementForm(tk.Frame):
         else:
             messagebox.showerror("Error", "Failed to load statistics")
 
-    def load_users(self, tab):
-        pass
+    def user_list(self, tab):
+        for widget in tab.winfo_children():
+            widget.destroy()
+
+        # Create frame to contain buttons
+        button_frame = tk.Frame(tab)
+        button_frame.pack(side=tk.TOP, anchor='nw', padx=5, pady=5)
+
+        # Create Treeview for room list
+        columns = ("no", "user", "role")
+        self.user_treeview = ttk.Treeview(tab, columns=columns, show='headings')
+        self.user_treeview.heading("no", text="NO")
+        self.user_treeview.heading("user", text="User")
+        self.user_treeview.heading("role", text="Role")
+        self.user_treeview.pack(fill=tk.BOTH, expand=True)
+
+        self.load_users()
+
+        for child in self.user_treeview.get_children():
+            self.user_treeview.item(child, tags=("editable",))
+
+        self.delete_user_button = tk.Button(
+            button_frame, text="Delete",
+            command=self.delete_selected_user, state="disabled")
+
+        # Place buttons on top of Treeview
+        self.delete_user_button.pack(side=tk.LEFT, padx=5, pady=5)
+
+        self.user_treeview.bind("<ButtonRelease-1>", self.check_user_selection)
+        # self.room_treeview.bind("<ButtonRelease-3>", self.check_selection)
+        self.clear_user_selection_button = tk.Button(
+            button_frame, text="Clear Selection",
+            command=self.clear_user_selection, state="disabled")
+        self.clear_user_selection_button.pack(side=tk.LEFT)
+
+    def load_users(self):
+        api_url = "http://127.0.0.1:8000/api/account/users/"
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        response = requests.get(api_url, headers=headers)
+        users = response.json() if response.status_code == 200 else []
+
+        self.user_ids = {}
+        for idx, user in enumerate(users):
+            self.user_treeview.insert("", "end", values=(
+                idx + 1,
+                user['username'],
+                user['role']
+            ))
+            self.user_ids[idx+1] = user['id']
+
+    def check_user_selection(self, event):
+        item = self.user_treeview.selection()
+        if item:
+            self.delete_user_button.config(state="normal")
+            self.clear_user_selection_button.config(state="normal")
+
+    def clear_user_selection(self):
+        self.user_treeview.selection_remove(self.user_treeview.selection())
+        self.delete_user_button.config(state="disabled")
+        self.clear_user_selection_button.config(state="disabled")
+
+    def delete_selected_user(self):
+        selected_item = self.user_treeview.selection()
+        selected_item_id = self.user_treeview.item(selected_item, "values")[0]
+        user_id = self.user_ids.get(int(selected_item_id))
+
+        api_url = f"http://127.0.0.1:8000/api/account/users/{user_id}"
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        response = requests.delete(api_url, headers=headers)
+        if response.status_code == 204:
+            self.user_treeview.delete(selected_item)
+            self.user_ids.pop(int(selected_item_id), None)
+            self.update_user_item_numbers()
+            self.clear_user_selection()
+            messagebox.showinfo("Success", "User deleted successfully")
+        else:
+            messagebox.showerror("Error", "Failed to delete user")
+
+    def update_user_item_numbers(self):
+        children = self.user_treeview.get_children()
+        for idx, child in enumerate(children, start=1):
+            self.user_treeview.item(child, values=(idx,) + self.user_treeview.item(child, "values")[1:])
 
     def clear_container(self):
         for widget in self.container.winfo_children():

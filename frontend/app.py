@@ -755,13 +755,13 @@ class HotelManagementForm(tk.Frame):
         room_entry.grid(row=1, column=1, padx=5, pady=5)
 
         tk.Label(update_booking_window, text="Start:").grid(row=2, column=0, padx=5, pady=5)
-        start_entry = tk.Entry(update_booking_window)
-        start_entry.insert(0, booking_data['start_time'])
+        start_entry = DateEntry(update_booking_window, date_pattern='yyyy-mm-dd')
+        start_entry.set_date(datetime.strptime(booking_data['start_time'], '%Y-%m-%d'))
         start_entry.grid(row=2, column=1, padx=5, pady=5)
 
         tk.Label(update_booking_window, text="End:").grid(row=3, column=0, padx=5, pady=5)
-        end_entry = tk.Entry(update_booking_window)
-        end_entry.insert(0, booking_data['end_time'])
+        end_entry = DateEntry(update_booking_window, date_pattern='yyyy-mm-dd')
+        end_entry.set_date(datetime.strptime(booking_data['end_time'], '%Y-%m-%d'))
         end_entry.grid(row=3, column=1, padx=5, pady=5)
 
         def save_updated_booking():
